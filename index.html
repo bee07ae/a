@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mochi y las galletas</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#5b4636;--card:#fffaf4ee;--line:#ecd9c5;--accent:#f08fa3;--sky1:#bfdcf0;--sky2:#f9e4d4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ink:#f3e3d3;--card:#3d312cee;--line:#5a4a42}}
+:root[data-theme="dark"]{--ink:#f3e3d3;--card:#3d312cee;--line:#5a4a42}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;user-select:none}
+html,body{height:100%;margin:0;overflow:hidden}
+body{background:linear-gradient(var(--sky1),var(--sky2) 55%,var(--sky2));font-family:"Nunito","Trebuchet MS",system-ui,sans-serif;color:var(--ink)}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;left:0;right:0;top:calc(env(safe-area-inset-top,0px) + 12px);display:flex;justify-content:space-between;padding:0 14px;pointer-events:none;gap:8px}
+.pill{background:var(--card);border:2px solid var(--line);border-radius:20px;padding:6px 14px;font-weight:800;font-size:18px}
+#hearts{color:#ef7b94;letter-spacing:2px}
+#ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--card);border:2px solid var(--line);border-radius:30px;padding:26px 24px;max-width:360px;text-align:center}
+.card h1{font-family:"Fredoka","Trebuchet MS",sans-serif;font-weight:600;font-size:32px;margin:0 0 8px;line-height:1.1}
+.card p{margin:6px 0;line-height:1.4;font-size:15px}
+.card small{display:block;color:var(--ink);opacity:.7;margin-top:10px;font-size:13px}
+button{font:inherit;color:var(--ink);cursor:pointer}
+#go{margin-top:14px;background:#f6b26b;border:3px solid #e39a50;border-radius:22px;padding:10px 34px;font-weight:800;font-size:20px}
+#go:active{transform:scale(.95)}
+#pad{position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:none;justify-content:space-between;padding:0 16px;pointer-events:none}
+@media (pointer:coarse){#pad{display:flex}.kb{display:none}}
+#pad button{pointer-events:auto;touch-action:none;width:74px;height:74px;border-radius:50%;background:var(--card);border:3px solid var(--line);font-size:28px;margin-right:10px}
+#pad button:last-child{margin:0;width:88px;height:88px}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="hud"><div class="pill" id="sc">🍪 0</div><div class="pill" id="ds">0 m</div><div class="pill" id="hearts">♥♥♥</div></div>
+<div id="ov"><div class="card"><h1 id="t">Mochi y las galletas</h1><p id="p">Corre por las islas flotantes, salta los huecos y atrapa todas las galletas del aire.</p><button id="go">Jugar</button><small class="kb">← → correr · Espacio saltar (¡y otra vez en el aire!)</small></div></div>
+<div id="pad"><div><button id="bl" aria-label="Izquierda">◀</button><button id="br" aria-label="Derecha">▶</button></div><button id="bj" aria-label="Saltar">⬆</button></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),R=(a,b)=>a+Math.random()*(b-a),C=(v,a,b)=>Math.max(a,Math.min(b,v));
+const M=(c,o)=>new THREE.MeshStandardMaterial(Object.assign({color:c,roughness:.8},o||{}));
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene();scene.fog=new THREE.Fog(0xf9e4d4,28,100);
+const cam=new THREE.PerspectiveCamera(55,1,.1,220);
+scene.add(new THREE.HemisphereLight(0xfff1e0,0xb9a0c8,.9));
+const sun=new THREE.DirectionalLight(0xfff0d8,.85);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-16,right:16,top:16,bottom:-16,far:60});scene.add(sun,sun.target);
+function resize(){renderer.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix()}
+addEventListener('resize',resize);resize();
+
+/* ---------- Mochi (personaje) ---------- */
+const sph=new THREE.SphereGeometry(1,24,16);
+function ell(m,sx,sy,sz,x,y,z,p){const o=new THREE.Mesh(sph,m);o.scale.set(sx,sy,sz);o.position.set(x,y,z);o.castShadow=true;p.add(o);return o}
+function grp(p,x,y,z){const g=new THREE.Group();g.position.set(x,y,z);p.add(g);return g}
+const white=M(0xfaf6f1,{roughness:.5}),black=M(0x0e0d0d,{roughness:.2}),shine=new THREE.MeshBasicMaterial({color:0xffffff});
+const bunny=new THREE.Group(),rig=grp(bunny,0,0,0);rig.scale.setScalar(.85);
+ell(white,.4,.5,.34,0,.5,0,rig);
+const head=grp(rig,0,1.08,0);ell(white,.62,.52,.5,0,0,0,head);
+const ears=[-1,1].map(s=>{const e=grp(head,s*.3,.38,0);e.rotation.z=-s*.18;ell(white,.17,.5,.13,0,.46,0,e);return e});
+[-1,1].forEach(s=>{ell(black,.1,.125,.07,s*.32,-.05,.41,head);ell(shine,.035,.04,.02,s*.32-.03,-.005,.475,head)});
+ell(black,.045,.01,.01,0,-.14,.485,head);
+const arms=[-1,1].map(s=>{const a=grp(rig,s*.4,.75,0);ell(white,.11,.28,.12,0,-.2,0,a);a.rotation.z=s*.25;return a});
+const legs=[-1,1].map(s=>{const l=grp(rig,s*.17,.3,0);ell(white,.16,.16,.2,0,-.15,.05,l);return l});
+scene.add(bunny);
+
+/* ---------- Galletas ---------- */
+const cg=new THREE.SphereGeometry(1,20,12),chg=new THREE.SphereGeometry(.07,8,6),dough=M(0xe8ad5e,{emissive:0x4a2c08,emissiveIntensity:.25}),chip=M(0x4a2a1a);
+function makeCookie(){const g=new THREE.Group(),i=grp(g,0,0,0);i.rotation.x=.25;const d=new THREE.Mesh(cg,dough);d.scale.set(.42,.42,.16);d.castShadow=true;i.add(d);
+ for(let k=0;k<8;k++){const a=R(0,6.28),r=R(0,.3),c=new THREE.Mesh(chg,chip);c.scale.set(1,1,.8);c.position.set(Math.cos(a)*r,Math.sin(a)*r,(k%2?1:-1)*.15);i.add(c)}return g}
+
+/* ---------- Islas ---------- */
+const gGrass=new THREE.CylinderGeometry(1,.98,.7,32),gDirt=new THREE.CylinderGeometry(1,.2,2.8,20);
+const mGrass=M(0x95d672),mDirt=M(0xb98763),mTrunk=M(0x9b6f4b),mLeaf=M(0x6fbd5e),mLeaf2=M(0x88cf6e),fl=[0xf6a5c0,0xffe08a,0xffffff,0xc9b6f2].map(c=>M(c));
+const tg=new THREE.CylinderGeometry(.1,.14,.8,8);
+function island(x,y,z,r){
+ const g=new THREE.Group();g.position.set(x,y,z);
+ const t=new THREE.Mesh(gGrass,mGrass);t.scale.set(r,1,r);t.position.y=-.35;t.receiveShadow=true;g.add(t);
+ const d=new THREE.Mesh(gDirt,mDirt);d.scale.set(r,1,r);d.position.y=-2.05;g.add(d);
+ for(let i=0;i<Math.ceil(r*1.3);i++){
+  const wz=(Math.random()<.5?-1:1)*R(1.8,r*.85),lz=wz-z,lx=R(-r,r)*.85;if(Math.hypot(lx,lz)>r*.88)continue;
+  const q=Math.random();
+  if(q<.3){const tr=new THREE.Mesh(tg,mTrunk);tr.position.set(lx,.4,lz);tr.castShadow=true;g.add(tr);ell(mLeaf,.65,.6,.65,lx,1.25,lz,g);ell(mLeaf2,.45,.42,.45,lx+.1,1.75,lz,g)}
+  else if(q<.55)ell(mLeaf2,.5,.38,.5,lx,.25,lz,g);
+  else for(let k=0;k<3;k++){const fx=lx+R(-.35,.35),fz=lz+R(-.35,.35);ell(mLeaf2,.14,.1,.14,fx,.05,fz,g);ell(fl[(Math.random()*4)|0],.1,.1,.1,fx,.22,fz,g)}
+ }
+ return {g,x,y,z,r,hw:Math.sqrt(r*r-z*z)};
+}
+const cloudM=M(0xffffff,{roughness:1,emissive:0xffffff,emissiveIntensity:.4});
+const clouds=[],bg=[];
+for(let i=0;i<14;i++){const c=new THREE.Group();for(let k=0;k<4;k++)ell(cloudM,R(1.6,2.6),R(.9,1.3),R(1.2,1.8),k*1.6-2.4,R(-.2,.3),R(-.4,.4),c).castShadow=false;
+ c.position.set(i*10-30,R(2,14),-R(14,50));scene.add(c);clouds.push(c)}
+for(let i=0;i<7;i++){const o=island(i*22-20,R(-4,5),-R(22,45),R(3,6));scene.add(o.g);bg.push(o.g)}
+
+/* ---------- Estado ---------- */
+let isl=[],cks=[],parts=[],tail,lastIsl,state='menu',lives=3,score=0,maxX=0,T=0,camY=0,hd=1,best=0;
+try{best=+localStorage.getItem('mochi3d-best')||0}catch(e){}
+const P={x:-2,y:0,vx:0,vy:0,g:true,j:2,co:0,buf:0,sq:0,t:0};
+const keys={l:0,r:0};
+function addCookie(x,y){const m=makeCookie();m.position.set(x,y,0);scene.add(m);cks.push({m,x,y,ph:R(0,6),on:true})}
+function gen(){
+ const p=tail,pr=C(p.x/450,0,1),r=R(3.6-pr*.8,5.4-pr*1.4),z=R(-1,1),hw=Math.sqrt(r*r-z*z);
+ const gap=R(1.6,2.8)+pr*2.2,x=p.x+p.hw+gap+hw,y=C(p.y+R(-1,1),-2.5,2.5);
+ const o=island(x,y,z,r);scene.add(o.g);isl.push(o);
+ for(let k=1;k<=4;k++){const t=k/5;addCookie(p.x+p.hw+(x-hw-p.x-p.hw)*t,p.y+(y-p.y)*t+1.1+Math.sin(Math.PI*t)*1.9)}
+ const n=Math.floor(hw/1.5),hi=Math.random()<.5;
+ for(let k=0;k<n;k++){const t=n>1?k/(n-1):.5;addCookie(x-hw*.6+hw*1.2*t,y+(hi?2.4:1.3+Math.sin(Math.PI*t)*1.3))}
+ tail=o;
+}
+function world(){
+ isl.forEach(o=>scene.remove(o.g));cks.forEach(c=>scene.remove(c.m));isl=[];cks=[];
+ const s=island(0,0,0,6.5);scene.add(s.g);isl.push(s);tail=s;lastIsl=s;
+ Object.assign(P,{x:-2,y:0,vx:0,vy:0,g:true,j:2,co:.1,buf:0,sq:0});maxX=0;camY=0;
+ while(tail.x<P.x+95)gen();
+}
+function hud(){$('sc').textContent='🍪 '+score;$('ds').textContent=Math.floor(maxX)+' m';$('hearts').textContent='♥'.repeat(lives)+'♡'.repeat(3-lives)}
+let ac;function sfx(f,d){d=d||.12;try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain(),n=ac.currentTime;
+ o.frequency.setValueAtTime(f,n);o.frequency.exponentialRampToValueAtTime(f*1.6,n+d);g.gain.setValueAtTime(.07,n);g.gain.exponentialRampToValueAtTime(.001,n+d);o.connect(g);g.connect(ac.destination);o.start();o.stop(n+d)}catch(e){}}
+const sg=new THREE.SphereGeometry(.09,6,5),sm=new THREE.MeshBasicMaterial({color:0xffd36b}),dm=new THREE.MeshBasicMaterial({color:0xffffff});
+function burst(x,y,n,m){for(let i=0;i<n;i++){const o=new THREE.Mesh(sg,m||sm);o.position.set(x,y,0);scene.add(o);parts.push({o,vx:R(-3,3),vy:R(1,5),l:.6})}}
+function over(){state='over';let nb=score>best;if(nb){best=score;try{localStorage.setItem('mochi3d-best',best)}catch(e){}}
+ $('t').textContent='¡Qué rica aventura!';$('p').textContent='Atrapaste '+score+' galletas y corriste '+Math.floor(maxX)+' m.'+(nb?' ¡Nuevo récord! 🎉':' Tu récord: '+best+' 🍪');$('go').textContent='Otra vez';$('ov').style.display='flex'}
+function start(){world();lives=3;score=0;hud();state='play';$('ov').style.display='none';sfx(440)}
+$('go').onclick=start;
+
+/* ---------- Controles ---------- */
+addEventListener('keydown',e=>{const c=e.code;
+ if(c==='ArrowLeft'||c==='KeyA')keys.l=1;else if(c==='ArrowRight'||c==='KeyD')keys.r=1;
+ else if(c==='Space'||c==='ArrowUp'||c==='KeyW'){if(!e.repeat)P.buf=.15}else return;e.preventDefault()});
+addEventListener('keyup',e=>{const c=e.code;if(c==='ArrowLeft'||c==='KeyA')keys.l=0;if(c==='ArrowRight'||c==='KeyD')keys.r=0});
+function hold(id,k){const b=$(id);b.addEventListener('pointerdown',e=>{e.preventDefault();keys[k]=1});['pointerup','pointercancel','pointerleave'].forEach(v=>b.addEventListener(v,()=>keys[k]=0))}
+hold('bl','l');hold('br','r');$('bj').addEventListener('pointerdown',e=>{e.preventDefault();P.buf=.15});
+
+/* ---------- Lógica ---------- */
+function step(dt){
+ const dir=keys.r-keys.l;
+ P.vx+=(dir*8.5-P.vx)*Math.min(1,dt*(dir?10:8));P.x+=P.vx*dt;if(dir)hd=dir;
+ P.buf-=dt;P.vy-=28*dt;const py=P.y;P.y+=P.vy*dt;
+ let L=null;
+ if(P.vy<=0)for(const o of isl){if(Math.abs(P.x-o.x)<=o.hw+.1&&py>=o.y-.3&&P.y<=o.y){L=o;break}}
+ if(L){if(!P.g&&P.vy<-6){P.sq=.7;burst(P.x,L.y+.1,5,dm)}P.y=L.y;P.vy=0;P.g=true;P.j=2;P.co=.1;lastIsl=L}
+ else{P.g=false;P.co-=dt;if(P.co<=0&&P.j>1)P.j=1}
+ if(P.buf>0){
+  if((P.g||P.co>0)&&P.j===2){P.vy=11;P.j=1;P.g=false;P.co=0;P.buf=0;P.sq=-.6;sfx(520)}
+  else if(!P.g&&P.co<=0&&P.j>0){P.vy=10;P.j=0;P.buf=0;P.sq=-.6;burst(P.x,P.y+.3,6,dm);sfx(700)}
+ }
+ maxX=Math.max(maxX,P.x);
+ for(const c of cks)if(c.on){const dx=c.x-P.x,dy=c.m.position.y-(P.y+.8);if(dx*dx+dy*dy<1.7){c.on=false;scene.remove(c.m);score++;burst(c.x,c.m.position.y,8);sfx(880,.15);hud()}}
+ while(isl[0]&&isl[0].x<P.x-70){scene.remove(isl.shift().g)}
+ for(let i=cks.length-1;i>=0;i--)if(cks[i].x<P.x-70||!cks[i].on&&cks[i].x<P.x-5)cks.splice(i,1);
+ while(tail.x<P.x+95)gen();
+ if(P.y<-14){lives--;hud();sfx(220,.3);if(lives<=0)over();else{P.x=lastIsl.x;P.y=lastIsl.y+.01;P.vx=0;P.vy=0;P.g=true;P.j=2}}
+ if(P.x%1>.98)hud();else if(Math.floor(maxX)!==+$('ds').textContent.replace(' m',''))hud();
+}
+function anim(dt){
+ const run=state==='play'&&P.g?Math.abs(P.vx):0,air=state==='play'&&!P.g;
+ P.t+=dt*(5+run*1.2);const s=Math.sin(P.t),sw=run>.5?s*.9:0,k=Math.min(1,dt*14);
+ legs[0].rotation.x+=((air?.6:sw)-legs[0].rotation.x)*k;legs[1].rotation.x+=((air?-.4:-sw)-legs[1].rotation.x)*k;
+ arms.forEach((a,i)=>{const sd=i?1:-1;a.rotation.x+=((air?0:(i?sw:-sw))-a.rotation.x)*k;a.rotation.z+=(sd*(air?1.5:.25)-a.rotation.z)*k});
+ rig.position.y=run>.5?Math.abs(s)*.1:(state==='play'?0:Math.sin(T*2)*.03);
+ ears.forEach((e,i)=>{e.rotation.x=-.12-run*.02+C(-P.vy*.025,-.35,.35)+Math.sin(T*3+i)*.04});
+ const dir=keys.r-keys.l,tg=(state!=='play'||(!dir&&P.g&&Math.abs(P.vx)<1))?.35:(hd>0?Math.PI/2-.5:-Math.PI/2+.5);
+ rig.rotation.y+=(tg-rig.rotation.y)*Math.min(1,dt*10);
+ P.sq+=(0-P.sq)*Math.min(1,dt*9);bunny.scale.set(1+P.sq*.2,1-P.sq*.3,1+P.sq*.2);
+ bunny.position.set(P.x,P.y,0);
+}
+let prev=performance.now();
+function loop(now){
+ const dt=Math.min((now-prev)/1000,.05);prev=now;T+=dt;
+ if(state==='play')step(dt);
+ anim(dt);
+ for(const c of cks)if(c.on){c.m.rotation.y+=dt*2.2;c.m.position.y=c.y+Math.sin(T*2+c.ph)*.14}
+ for(let i=parts.length-1;i>=0;i--){const p=parts[i];p.l-=dt;p.vy-=10*dt;p.o.position.x+=p.vx*dt;p.o.position.y+=p.vy*dt;p.o.scale.setScalar(Math.max(p.l/.6,.001));if(p.l<=0){scene.remove(p.o);parts.splice(i,1)}}
+ clouds.forEach(c=>{c.position.x+=dt*.4;if(c.position.x<P.x-70)c.position.x+=140;if(c.position.x>P.x+70)c.position.x-=140});
+ bg.forEach(g=>{if(g.position.x<P.x-60)g.position.x+=154;});
+ const portrait=innerWidth/innerHeight<1,kz=portrait?1.55:1;
+ camY+=(P.y-camY)*Math.min(1,dt*2.5);
+ cam.position.x+=(P.x+(portrait?2.2:4.2)-cam.position.x)*Math.min(1,dt*5);
+ cam.position.y=camY+4+(portrait?1.5:0);cam.position.z=10.5*kz;
+ cam.lookAt(cam.position.x+1.2,camY+1.3,0);
+ sun.position.set(P.x+8,P.y+16,10);sun.target.position.set(P.x,P.y,0);
+ renderer.render(scene,cam);requestAnimationFrame(loop);
+}
+world();hud();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
